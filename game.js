@@ -1,34 +1,20 @@
 
 // ============================================
 // ASTEROIDS: GALACTIC WARFARE - ULTIMATE EDITION
+// REBALANCED VERSION
 // ============================================
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
-
 const $ = id => document.getElementById(id);
 
-const scoreDisplay = $("score");
-const goldDisplay = $("gold");
-const roundDisplay = $("round");
-const livesDisplay = $("lives");
-const overlay = $("overlay");
-const shop = $("shop");
-const pauseScreen = $("pauseScreen");
-const bossBar = $("bossBar");
-
-let W = 900;
-let H = 600;
-let running = false;
-let paused = false;
-let gameOver = false;
-let score = 0;
-let gold = 0;
-let round = 1;
-let lives = 3;
-let nextShopScore = 5000;
+let W = 900, H = 600;
+let running = false, paused = false, gameOver = false;
+let score = 0, gold = 500, round = 1, lives = 7;
+let nextShopScore = 1000;
 let lastTime = 0;
 let keys = {};
+
 let asteroids = [];
 let bullets = [];
 let enemies = [];
@@ -38,68 +24,67 @@ let drops = [];
 let helpers = [];
 let drones = [];
 let boss = null;
+
 let waveSpawned = false;
 let waveTimer = 0;
 let shootTimer = 0;
 let enemyTimer = 0;
+let eventTimer = 0;
 let ultimateCharge = 0;
 let ultimateReady = false;
-let eventTimer = 0;
-let currentEvent = "";
 let invincibleTimer = 0;
-let lastScore = 0;
 
 const saved = JSON.parse(localStorage.getItem("galacticWarfareSave") || "{}");
 
 let highScore = saved.highScore || 0;
 let highestRound = saved.highestRound || 1;
 let achievements = saved.achievements || [];
-let unlockedShips = saved.unlockedShips || ["default"];
 
 const ship = {
-  x: 450,
-  y: 300,
+  x: 450, y: 300,
   angle: -Math.PI / 2,
-  vx: 0,
-  vy: 0,
+  vx: 0, vy: 0,
   radius: 15,
   thrust: 260,
   rotation: 4.2,
   health: 100,
   shield: 0,
-  fireRate: 0.35,
   damage: 1,
   speed: 1,
   alive: true
 };
 
 const upgrades = [
-  { id: "shield", name: "Regenerating Shield", description: "Protects your ship and regenerates over time.", cost: 250, level: 0, max: 5 },
-  { id: "laser", name: "Laser Cannon", description: "Adds powerful piercing laser beams.", cost: 300, level: 0, max: 5 },
-  { id: "helpers", name: "Helper Squadron", description: "Companion ships automatically attack enemies.", cost: 400, level: 0, max: 5 },
-  { id: "spread", name: "Plasma Spread", description: "Fires multiple plasma projectiles.", cost: 350, level: 0, max: 5 },
-  { id: "emp", name: "EMP Pulse", description: "Electric shockwaves damage nearby enemies.", cost: 450, level: 0, max: 5 },
-  { id: "missiles", name: "Homing Missiles", description: "Missiles automatically chase targets.", cost: 500, level: 0, max: 5 },
-  { id: "overdrive", name: "Overdrive", description: "Improves speed and acceleration.", cost: 300, level: 0, max: 5 },
-  { id: "drones", name: "Orbital Drones", description: "Drones orbit and damage nearby asteroids.", cost: 450, level: 0, max: 5 },
-  { id: "nova", name: "Nova Explosion", description: "Unleashes a damaging explosion around you.", cost: 600, level: 0, max: 5 },
-  { id: "magnet", name: "Gold Magnet", description: "Attracts gold from a greater distance.", cost: 300, level: 0, max: 5 },
-  { id: "heavy", name: "Heavy Cannon", description: "Fires slower but much stronger shots.", cost: 450, level: 0, max: 5 },
-  { id: "phase", name: "Phase Shift", description: "Grants temporary protection.", cost: 500, level: 0, max: 5 },
-  { id: "repair", name: "Nano Repair", description: "Repairs your ship and restores lives.", cost: 550, level: 0, max: 5 },
-  { id: "berserker", name: "Berserker Mode", description: "Boosts damage and weapon strength.", cost: 650, level: 0, max: 5 }
+  { id: "shield", name: "Regenerating Shield", description: "Protects your ship and regenerates.", cost: 250, level: 0 },
+  { id: "laser", name: "Laser Cannon", description: "Adds extra powerful laser beams.", cost: 300, level: 0 },
+  { id: "helpers", name: "Helper Squadron", description: "Companion ships automatically attack.", cost: 400, level: 0 },
+  { id: "spread", name: "Plasma Spread", description: "Fires multiple plasma projectiles.", cost: 350, level: 0 },
+  { id: "emp", name: "EMP Pulse", description: "Damages nearby enemies. Press Q.", cost: 450, level: 0 },
+  { id: "missiles", name: "Homing Missiles", description: "Automatically fires tracking missiles.", cost: 500, level: 0 },
+  { id: "overdrive", name: "Overdrive", description: "Improves ship speed.", cost: 300, level: 0 },
+  { id: "drones", name: "Orbital Drones", description: "Drones orbit and damage asteroids.", cost: 450, level: 0 },
+  { id: "nova", name: "Nova Explosion", description: "Powerful explosion. Press R.", cost: 600, level: 0 },
+  { id: "magnet", name: "Gold Magnet", description: "Attracts gold from farther away.", cost: 300, level: 0 },
+  { id: "heavy", name: "Heavy Cannon", description: "Fires stronger projectiles.", cost: 450, level: 0 },
+  { id: "phase", name: "Phase Shift", description: "Chance to avoid incoming damage.", cost: 500, level: 0 },
+  { id: "repair", name: "Nano Repair", description: "Repairs your ship and adds lives.", cost: 550, level: 0 },
+  { id: "berserker", name: "Berserker Mode", description: "Increases weapon damage.", cost: 650, level: 0 }
 ];
+
+const stars = Array.from({ length: 150 }, () => ({
+  x: Math.random() * W,
+  y: Math.random() * H,
+  size: Math.random() * 1.8 + 0.3,
+  brightness: Math.random()
+}));
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
   W = rect.width;
   H = rect.height;
-
   canvas.width = W * dpr;
   canvas.height = H * dpr;
-
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   if (!running) {
@@ -111,128 +96,128 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// Background stars
-const stars = Array.from({ length: 150 }, () => ({
-  x: Math.random() * W,
-  y: Math.random() * H,
-  size: Math.random() * 1.8 + 0.3,
-  brightness: Math.random()
-}));
-
 function saveGame() {
   localStorage.setItem("galacticWarfareSave", JSON.stringify({
     highScore,
     highestRound,
-    achievements,
-    unlockedShips
+    achievements
   }));
 }
 
 function updateHUD() {
-  scoreDisplay.textContent = score.toLocaleString();
-  goldDisplay.textContent = gold.toLocaleString();
-  roundDisplay.textContent = `${round} / 500`;
-  livesDisplay.textContent = lives;
+  $("score").textContent = score.toLocaleString();
+  $("gold").textContent = gold.toLocaleString();
+  $("round").textContent = `${round} / 500`;
+  $("lives").textContent = lives;
   $("highScore").textContent = `HIGH SCORE: ${highScore.toLocaleString()}`;
-}
-
-function randomEdgePosition() {
-  const side = Math.floor(Math.random() * 4);
-
-  if (side === 0) return { x: Math.random() * W, y: -30 };
-  if (side === 1) return { x: W + 30, y: Math.random() * H };
-  if (side === 2) return { x: Math.random() * W, y: H + 30 };
-
-  return { x: -30, y: Math.random() * H };
 }
 
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function getUpgrade(id) {
+function level(id) {
   return upgrades.find(u => u.id === id)?.level || 0;
-}
-
-function addScore(amount) {
-  score += amount;
-
-  if (score > highScore) {
-    highScore = score;
-  }
-
-  if (score >= nextShopScore && running && !gameOver) {
-    nextShopScore += 5000;
-    openShop();
-  }
-
-  updateHUD();
-  checkAchievements();
-}
-
-function checkAchievements() {
-  const checks = [
-    ["firstKill", score >= 100, "First Steps"],
-    ["score10000", score >= 10000, "Space Millionaire"],
-    ["gold5000", gold >= 5000, "Gold Collector"],
-    ["round10", highestRound >= 10, "Survivor"],
-    ["round50", highestRound >= 50, "Galaxy Veteran"],
-    ["round100", highestRound >= 100, "Legend"],
-    ["round500", round >= 500, "Galaxy Savior"]
-  ];
-
-  checks.forEach(([id, condition, name]) => {
-    if (condition && !achievements.includes(id)) {
-      achievements.push(id);
-      showMessage(`ACHIEVEMENT: ${name}`);
-      saveGame();
-    }
-  });
 }
 
 function showMessage(message) {
   $("status").textContent = message;
 }
 
-function createParticles(x, y, color, count = 12) {
+function addScore(amount) {
+  score += amount;
+
+  if (score > highScore) highScore = score;
+
+  if (score >= nextShopScore && running && !gameOver) {
+    nextShopScore += 1000;
+    openShop();
+  }
+
+  checkAchievements();
+  updateHUD();
+}
+
+function checkAchievements() {
+  const checks = [
+    ["firstKill", score >= 100],
+    ["score10000", score >= 10000],
+    ["gold5000", gold >= 5000],
+    ["round10", highestRound >= 10],
+    ["round50", highestRound >= 50],
+    ["round100", highestRound >= 100],
+    ["round500", round >= 500]
+  ];
+
+  checks.forEach(([id, condition]) => {
+    if (condition && !achievements.includes(id)) {
+      achievements.push(id);
+      saveGame();
+      showMessage("NEW ACHIEVEMENT UNLOCKED!");
+    }
+  });
+}
+
+function randomEdgePosition() {
+  const side = Math.floor(Math.random() * 4);
+  if (side === 0) return { x: Math.random() * W, y: -30 };
+  if (side === 1) return { x: W + 30, y: Math.random() * H };
+  if (side === 2) return { x: Math.random() * W, y: H + 30 };
+  return { x: -30, y: Math.random() * H };
+}
+
+function wrap(obj, margin = 30) {
+  if (obj.x < -margin) obj.x = W + margin;
+  if (obj.x > W + margin) obj.x = -margin;
+  if (obj.y < -margin) obj.y = H + margin;
+  if (obj.y > H + margin) obj.y = -margin;
+}
+
+function createParticles(x, y, color, count = 15) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 180 + 30;
+    const speed = 40 + Math.random() * 180;
 
     particles.push({
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      life: 0.5 + Math.random() * 0.6,
-      maxLife: 1.1,
+      life: 0.5 + Math.random() * 0.7,
+      maxLife: 1.2,
       color,
-      size: Math.random() * 3 + 1
+      size: 2 + Math.random() * 3
     });
   }
 }
 
+// Larger rocks have more health and split into two smaller rocks.
 function createAsteroid(x, y, size, isGolden = false) {
-  const health = size === 4 ? 12 : size === 3 ? 7 : size === 2 ? 4 : 2;
-  const sides = Math.floor(Math.random() * 4) + 8;
-  const shape = Array.from({ length: sides }, () => 0.75 + Math.random() * 0.4);
+  const settings = {
+    3: { radius: 30, health: 5 },
+    2: { radius: 20, health: 3 },
+    1: { radius: 12, health: 2 }
+  };
+
+  const config = settings[size];
+  const sides = 9 + Math.floor(Math.random() * 4);
 
   asteroids.push({
     x, y,
     size,
-    radius: size * 12,
-    health,
-    maxHealth: health,
-    vx: (Math.random() - 0.5) * (65 + round * 2),
-    vy: (Math.random() - 0.5) * (65 + round * 2),
+    radius: config.radius,
+    health: config.health,
+    maxHealth: config.health,
+    vx: (Math.random() - 0.5) * (75 + round * 1.5),
+    vy: (Math.random() - 0.5) * (75 + round * 1.5),
     rotation: Math.random() * 5,
     spin: (Math.random() - 0.5) * 2,
-    shape,
+    shape: Array.from({ length: sides }, () => 0.75 + Math.random() * 0.4),
     golden: isGolden
   });
 }
 
 function spawnWave() {
-  if (waveSpawned || asteroids.length > 0 || enemies.length > 0 || boss) return;
+  if (waveSpawned || asteroids.length || enemies.length || boss) return;
 
   waveSpawned = true;
 
@@ -246,29 +231,48 @@ function spawnWave() {
     return;
   }
 
-  const count = Math.min(3 + round, 18);
+  // More asteroids, with more large rocks.
+  const count = Math.min(8 + round * 2, 35);
 
   for (let i = 0; i < count; i++) {
     const pos = randomEdgePosition();
-    const size = Math.random() < 0.12 ? 4 :
-      Math.random() < 0.35 ? 3 :
-      Math.random() < 0.65 ? 2 : 1;
+    const roll = Math.random();
 
-    createAsteroid(pos.x, pos.y, size, Math.random() < 0.08);
+    const size = roll < 0.30 ? 3 :
+      roll < 0.70 ? 2 : 1;
+
+    createAsteroid(pos.x, pos.y, size, Math.random() < 0.10);
+  }
+
+  // Add enemy ships in later rounds.
+  if (round >= 3) {
+    const enemyCount = Math.min(1 + Math.floor(round / 5), 6);
+
+    for (let i = 0; i < enemyCount; i++) {
+      const pos = randomEdgePosition();
+
+      enemies.push({
+        x: pos.x,
+        y: pos.y,
+        health: 4 + round,
+        speed: 55 + Math.min(round * 1.5, 90),
+        timer: 2,
+        elite: round % 10 === 0
+      });
+    }
   }
 
   showMessage(`ROUND ${round}: ASTEROID WAVE`);
 }
 
+// Split rocks into smaller rocks when destroyed.
 function splitAsteroid(a) {
-  createParticles(a.x, a.y, a.golden ? "#ffd166" : "#a8b7d4", 18);
+  createParticles(a.x, a.y, a.golden ? "#ffd166" : "#a8b7d4", 20);
 
-  const reward = a.size === 4 ? 100 : a.size === 3 ? 60 : a.size === 2 ? 30 : 15;
-  addScore(reward);
+  addScore(a.size === 3 ? 100 : a.size === 2 ? 60 : 30);
 
   if (a.golden) {
-    const amount = a.size === 4 ? 60 + Math.floor(Math.random() * 41) :
-      a.size === 3 ? 30 + Math.floor(Math.random() * 21) :
+    const amount = a.size === 3 ? 30 + Math.floor(Math.random() * 21) :
       a.size === 2 ? 15 + Math.floor(Math.random() * 11) :
       5 + Math.floor(Math.random() * 6);
 
@@ -276,62 +280,71 @@ function splitAsteroid(a) {
       x: a.x,
       y: a.y,
       value: amount,
-      type: "gold",
       vx: 0,
       vy: 0
     });
   }
 
   if (a.size > 1) {
-    const childSize = a.size - 1;
+    const smallerSize = a.size - 1;
 
+    // Each rock creates two smaller rocks.
     for (let i = 0; i < 2; i++) {
-      createAsteroid(
-        a.x + (Math.random() - 0.5) * 20,
-        a.y + (Math.random() - 0.5) * 20,
-        childSize,
+      const child = createAsteroid;
+      child(
+        a.x + (Math.random() - 0.5) * 25,
+        a.y + (Math.random() - 0.5) * 25,
+        smallerSize,
         a.golden && Math.random() < 0.5
       );
     }
+
+    showMessage("ASTEROID SPLIT!");
+  } else {
+    // Small rocks break into visible fragments.
+    createParticles(a.x, a.y, "#c5d5eb", 12);
   }
 }
 
 function spawnBoss() {
   const legendary = round % 25 === 0;
-  const health = 100 + round * 35 + (legendary ? 600 : 0);
+
+  // Bosses have much less health than before.
+  const health = 100 + round * 12 + (legendary ? 250 : 0);
 
   boss = {
     x: W / 2,
     y: 100,
-    radius: legendary ? 65 : 48,
+    radius: legendary ? 58 : 43,
     health,
     maxHealth: health,
-    vx: 100,
-    attackTimer: 1,
+    vx: 65,
+    attackTimer: 2.5,
     legendary
   };
 
-  $("bossName").textContent = legendary ? "LEGENDARY GALACTIC OVERLORD" : `ROUND ${round} BOSS`;
-  bossBar.classList.remove("hidden");
-  updateBossBar();
+  $("bossName").textContent = legendary
+    ? "LEGENDARY GALACTIC OVERLORD"
+    : `ROUND ${round} BOSS`;
+
+  $("bossHealth").style.width = "100%";
+  $("bossBar").classList.remove("hidden");
   showMessage(legendary ? "LEGENDARY BOSS INCOMING!" : "BOSS BATTLE!");
 }
 
 function updateBossBar() {
   if (!boss) return;
-
-  $("bossHealth").style.width = `${Math.max(0, boss.health / boss.maxHealth * 100)}%`;
+  $("bossHealth").style.width =
+    `${Math.max(0, boss.health / boss.maxHealth * 100)}%`;
 }
 
 function fireBullet() {
-  const level = getUpgrade("laser");
-  const spread = getUpgrade("spread");
-  const heavy = getUpgrade("heavy");
-  const berserker = getUpgrade("berserker");
+  const laser = level("laser");
+  const spread = level("spread");
+  const heavy = level("heavy");
+  const damage = ship.damage + level("berserker") * 2 + heavy * 2;
 
-  const damage = ship.damage + heavy * 2 + berserker * 2;
-
-  function addShot(angle, type = "normal") {
+  function shot(angle, type = "normal") {
     bullets.push({
       x: ship.x + Math.cos(angle) * 20,
       y: ship.y + Math.sin(angle) * 20,
@@ -340,47 +353,35 @@ function fireBullet() {
       damage,
       life: 1.5,
       type,
-      piercing: level >= 3
+      piercing: laser >= 3
     });
   }
 
   if (spread > 0) {
-    const count = Math.min(3 + spread * 2, 11);
-    const width = 0.7 + spread * 0.08;
+    const count = 3 + spread * 2;
+    const width = 0.65 + spread * 0.08;
 
     for (let i = 0; i < count; i++) {
-      const angle = ship.angle + (i / (count - 1) - 0.5) * width;
-      addShot(angle, "plasma");
+      shot(ship.angle + (i / (count - 1) - 0.5) * width, "plasma");
     }
   } else {
-    addShot(ship.angle);
+    shot(ship.angle);
   }
 
-  if (level >= 1) {
-    const offset = 0.14;
-    addShot(ship.angle - offset, "laser");
-    addShot(ship.angle + offset, "laser");
+  if (laser > 0) {
+    shot(ship.angle - 0.14, "laser");
+    shot(ship.angle + 0.14, "laser");
   }
 
   if (heavy > 0) {
-    bullets.push({
-      x: ship.x,
-      y: ship.y,
-      vx: Math.cos(ship.angle) * 400,
-      vy: Math.sin(ship.angle) * 400,
-      damage: 5 + heavy * 4,
-      life: 1.5,
-      type: "heavy",
-      piercing: true
-    });
+    shot(ship.angle, "heavy");
   }
 }
 
 function fireMissile() {
-  if (getUpgrade("missiles") === 0) return;
+  if (!level("missiles")) return;
 
   const targets = [...asteroids, ...enemies, ...(boss ? [boss] : [])];
-
   if (!targets.length) return;
 
   const target = targets.reduce((best, current) =>
@@ -392,9 +393,9 @@ function fireMissile() {
   bullets.push({
     x: ship.x,
     y: ship.y,
-    vx: Math.cos(angle) * 320,
-    vy: Math.sin(angle) * 320,
-    damage: 5 + getUpgrade("missiles") * 3,
+    vx: Math.cos(angle) * 300,
+    vy: Math.sin(angle) * 300,
+    damage: 5 + level("missiles") * 3,
     life: 3,
     type: "missile",
     target
@@ -402,27 +403,22 @@ function fireMissile() {
 }
 
 function useEMP() {
-  const level = getUpgrade("emp");
-  if (!level) return;
+  const power = level("emp");
+  if (!power) return;
 
-  const radius = 140 + level * 45;
-
-  createParticles(ship.x, ship.y, "#39e8ff", 45);
+  const radius = 150 + power * 35;
+  createParticles(ship.x, ship.y, "#39e8ff", 40);
 
   asteroids.forEach(a => {
-    if (distance(ship, a) < radius) {
-      a.health -= 2 + level * 3;
-    }
+    if (distance(ship, a) < radius) a.health -= 3 + power * 3;
   });
 
   enemies.forEach(e => {
-    if (distance(ship, e) < radius) {
-      e.health -= 5 + level * 5;
-    }
+    if (distance(ship, e) < radius) e.health -= 8 + power * 5;
   });
 
   if (boss && distance(ship, boss) < radius) {
-    boss.health -= 8 + level * 7;
+    boss.health -= 12 + power * 10;
     updateBossBar();
   }
 
@@ -430,23 +426,22 @@ function useEMP() {
 }
 
 function useNova() {
-  const level = getUpgrade("nova");
-  if (!level) return;
+  const power = level("nova");
+  if (!power) return;
 
-  const radius = 160 + level * 45;
-
-  createParticles(ship.x, ship.y, "#c17aff", 65);
+  const radius = 180 + power * 35;
+  createParticles(ship.x, ship.y, "#c17aff", 60);
 
   asteroids.forEach(a => {
-    if (distance(ship, a) < radius) a.health -= 10 + level * 6;
+    if (distance(ship, a) < radius) a.health -= 12 + power * 6;
   });
 
   enemies.forEach(e => {
-    if (distance(ship, e) < radius) e.health -= 20 + level * 10;
+    if (distance(ship, e) < radius) e.health -= 20 + power * 10;
   });
 
   if (boss && distance(ship, boss) < radius) {
-    boss.health -= 30 + level * 20;
+    boss.health -= 30 + power * 20;
     updateBossBar();
   }
 
@@ -459,8 +454,7 @@ function useUltimate() {
   ultimateReady = false;
   ultimateCharge = 0;
 
-  createParticles(ship.x, ship.y, "#ffffff", 120);
-
+  createParticles(ship.x, ship.y, "#ffffff", 100);
   asteroids.forEach(a => a.health -= 100);
   enemies.forEach(e => e.health -= 100);
 
@@ -469,14 +463,22 @@ function useUltimate() {
     updateBossBar();
   }
 
-  showMessage("ULTIMATE WEAPON RELEASED!");
+  showMessage("ULTIMATE ATTACK!");
+}
+
+function createHelper() {
+  helpers.push({ angle: Math.random() * Math.PI * 2, timer: 0 });
+}
+
+function createDrone() {
+  drones.push({ angle: Math.random() * Math.PI * 2 });
 }
 
 function buyUpgrade(id) {
-  const upgrade = upgrades.find(u => u.id === id);
-  if (!upgrade) return;
+  const u = upgrades.find(item => item.id === id);
+  if (!u) return;
 
-  const price = Math.floor(upgrade.cost * Math.pow(1.7, upgrade.level));
+  const price = Math.floor(u.cost * Math.pow(1.55, u.level));
 
   if (gold < price) {
     showMessage("NOT ENOUGH GOLD");
@@ -484,56 +486,39 @@ function buyUpgrade(id) {
   }
 
   gold -= price;
-  upgrade.level++;
+  u.level++;
 
   if (id === "helpers") createHelper();
   if (id === "drones") createDrone();
-  if (id === "repair") {
-    lives += upgrade.level % 2 === 1 ? 1 : 0;
-    ship.health = Math.min(100, ship.health + 50);
-  }
 
   if (id === "shield") ship.shield = 100;
-  if (id === "overdrive") ship.speed = 1 + upgrade.level * 0.25;
+  if (id === "overdrive") ship.speed = 1 + u.level * 0.25;
   if (id === "laser") ship.damage += 1;
   if (id === "berserker") ship.damage += 2;
 
+  if (id === "repair") {
+    ship.health = 100;
+    lives++;
+  }
+
   updateHUD();
   renderShop();
-}
-
-function createHelper() {
-  helpers.push({
-    angle: Math.random() * Math.PI * 2,
-    timer: 0
-  });
-}
-
-function createDrone() {
-  drones.push({
-    angle: Math.random() * Math.PI * 2
-  });
+  showMessage(`${u.name} UPGRADED!`);
 }
 
 function renderShop() {
   $("shopGold").textContent = gold.toLocaleString();
-
   $("shopItems").innerHTML = "";
 
   upgrades.forEach(u => {
-    const price = Math.floor(u.cost * Math.pow(1.7, u.level));
-
+    const price = Math.floor(u.cost * Math.pow(1.55, u.level));
     const card = document.createElement("div");
+
     card.className = "shop-item";
-
-    const levelText = u.level >= 5
-      ? `Evolution Level ${u.level}`
-      : `Level ${u.level} / 5`;
-
     card.innerHTML = `
       <h3>${u.name}</h3>
       <p>${u.description}</p>
-      <p>${levelText}</p>
+      <p>Level ${u.level}</p>
       <button ${gold < price ? "disabled" : ""}>
         BUY / EVOLVE — ${price} GOLD
       </button>
@@ -548,16 +533,16 @@ function renderShop() {
 }
 
 function openShop() {
-  if (!running || gameOver) return;
+  if (!running || gameOver || !shop.classList.contains("hidden")) return;
 
   paused = true;
-  shop.classList.remove("hidden");
+  $("shop").classList.remove("hidden");
   renderShop();
   showMessage("COMMAND SHOP OPEN");
 }
 
 function closeShop() {
-  shop.classList.add("hidden");
+  $("shop").classList.add("hidden");
   paused = false;
   lastTime = performance.now();
   showMessage("MISSION RESUMED");
@@ -566,28 +551,25 @@ function closeShop() {
 function damageShip() {
   if (invincibleTimer > 0 || !ship.alive) return;
 
-  if (getUpgrade("shield") > 0 && ship.shield > 0) {
+  if (level("shield") > 0 && ship.shield > 0) {
     ship.shield -= 35;
-
-    if (ship.shield <= 0) {
-      ship.shield = 0;
-      createParticles(ship.x, ship.y, "#39e8ff", 30);
-    }
-
-    invincibleTimer = 0.7;
+    if (ship.shield < 0) ship.shield = 0;
+    createParticles(ship.x, ship.y, "#39e8ff", 12);
+    invincibleTimer = 1;
     return;
   }
 
-  if (getUpgrade("phase") > 0 && Math.random() < 0.25 + getUpgrade("phase") * 0.1) {
-    invincibleTimer = 1;
+  if (level("phase") > 0 &&
+      Math.random() < 0.25 + level("phase") * 0.1) {
+    invincibleTimer = 1.5;
     showMessage("PHASE SHIFT!");
     return;
   }
 
   lives--;
   invincibleTimer = 2;
-  createParticles(ship.x, ship.y, "#ff536d", 35);
 
+  createParticles(ship.x, ship.y, "#ff536d", 30);
   ship.x = W / 2;
   ship.y = H / 2;
   ship.vx = 0;
@@ -601,32 +583,32 @@ function damageShip() {
 function endGame() {
   running = false;
   gameOver = true;
-  bossBar.classList.add("hidden");
-  overlay.classList.remove("hidden");
-
+  $("bossBar").classList.add("hidden");
+  $("overlay").classList.remove("hidden");
   $("overlayTitle").innerHTML = "MISSION<br><span>FAILED</span>";
-  $("overlayText").textContent = `You reached Round ${round} and scored ${score.toLocaleString()} points.`;
+  $("overlayText").textContent =
+    `You reached Round ${round} and scored ${score.toLocaleString()} points.`;
   $("startButton").textContent = "TRY AGAIN";
-
   saveGame();
 }
 
 function victory() {
   running = false;
   gameOver = true;
-  overlay.classList.remove("hidden");
+  $("overlay").classList.remove("hidden");
   $("overlayTitle").innerHTML = "GALAXY<br><span>SAVED!</span>";
-  $("overlayText").textContent = `You survived all 500 rounds! Final score: ${score.toLocaleString()}.`;
+  $("overlayText").textContent =
+    `You survived all 500 rounds! Final score: ${score.toLocaleString()}.`;
   $("startButton").textContent = "PLAY AGAIN";
   saveGame();
 }
 
 function resetGame() {
   score = 0;
-  gold = 0;
+  gold = 500;
   round = 1;
-  lives = 3;
-  nextShopScore = 5000;
+  lives = 7;
+  nextShopScore = 1000;
 
   asteroids = [];
   bullets = [];
@@ -642,10 +624,9 @@ function resetGame() {
   waveTimer = 0;
   shootTimer = 0;
   enemyTimer = 0;
+  eventTimer = 0;
   ultimateCharge = 0;
   ultimateReady = false;
-  eventTimer = 0;
-  currentEvent = "";
   invincibleTimer = 0;
 
   upgrades.forEach(u => u.level = 0);
@@ -665,16 +646,21 @@ function resetGame() {
   paused = false;
   running = true;
 
-  overlay.classList.add("hidden");
-  shop.classList.add("hidden");
-  pauseScreen.classList.add("hidden");
-  bossBar.classList.add("hidden");
+  $("overlay").classList.add("hidden");
+  $("shop").classList.add("hidden");
+  $("pauseScreen").classList.add("hidden");
+  $("bossBar").classList.add("hidden");
 
   updateHUD();
   showMessage("MISSION STARTED");
   lastTime = performance.now();
+
   requestAnimationFrame(gameLoop);
 }
+
+// ============================================
+// DRAWING
+// ============================================
 
 function drawBackground() {
   ctx.fillStyle = "#030713";
@@ -691,7 +677,8 @@ function drawBackground() {
 
 function drawShip() {
   if (!ship.alive) return;
-  if (invincibleTimer > 0 && Math.floor(invincibleTimer * 10) % 2 === 0) return;
+  if (invincibleTimer > 0 &&
+      Math.floor(invincibleTimer * 10) % 2 === 0) return;
 
   ctx.save();
   ctx.translate(ship.x, ship.y);
@@ -722,18 +709,14 @@ function drawShip() {
   ctx.shadowColor = "#39e8ff";
   ctx.fill();
   ctx.stroke();
-
   ctx.restore();
 
-  if (getUpgrade("shield") > 0 && ship.shield > 0) {
+  if (level("shield") > 0 && ship.shield > 0) {
     ctx.beginPath();
     ctx.arc(ship.x, ship.y, 27, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(57,232,255,0.7)";
     ctx.lineWidth = 3;
-    ctx.shadowBlur = 18;
-    ctx.shadowColor = "#39e8ff";
     ctx.stroke();
-    ctx.shadowBlur = 0;
   }
 }
 
@@ -762,7 +745,6 @@ function drawAsteroids() {
     ctx.shadowColor = "#ffd166";
     ctx.fill();
     ctx.stroke();
-
     ctx.restore();
   });
 }
@@ -785,7 +767,6 @@ function drawEnemies() {
     ctx.lineWidth = 2;
     ctx.fill();
     ctx.stroke();
-
     ctx.restore();
   });
 }
@@ -802,7 +783,7 @@ function drawBoss() {
   ctx.strokeStyle = boss.legendary ? "#f4a2ff" : "#ff668e";
   ctx.lineWidth = 4;
   ctx.shadowBlur = 25;
-  ctx.shadowColor = boss.legendary ? "#c75bff" : "#ff315d";
+  ctx.shadowColor = "#ff315d";
   ctx.fill();
   ctx.stroke();
 
@@ -811,7 +792,6 @@ function drawBoss() {
   ctx.arc(-15, -7, 7, 0, Math.PI * 2);
   ctx.arc(15, -7, 7, 0, Math.PI * 2);
   ctx.fill();
-
   ctx.restore();
 }
 
@@ -819,6 +799,7 @@ function drawProjectiles() {
   bullets.forEach(b => {
     ctx.beginPath();
     ctx.arc(b.x, b.y, b.type === "heavy" ? 6 : 3, 0, Math.PI * 2);
+
     ctx.fillStyle = b.type === "missile" ? "#ff9d45" :
       b.type === "laser" ? "#39e8ff" :
       b.type === "heavy" ? "#ffcc55" :
@@ -846,10 +827,7 @@ function drawHelpers() {
     ctx.beginPath();
     ctx.arc(x, y, 7, 0, Math.PI * 2);
     ctx.fillStyle = "#54dfff";
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = "#39e8ff";
     ctx.fill();
-    ctx.shadowBlur = 0;
   });
 
   drones.forEach(d => {
@@ -885,12 +863,32 @@ function drawParticles() {
   ctx.globalAlpha = 1;
 }
 
-function wrap(object, margin = 30) {
-  if (object.x < -margin) object.x = W + margin;
-  if (object.x > W + margin) object.x = -margin;
-  if (object.y < -margin) object.y = H + margin;
-  if (object.y > H + margin) object.y = -margin;
+function render() {
+  drawBackground();
+  drawDrops();
+  drawAsteroids();
+  drawEnemies();
+  drawBoss();
+  drawProjectiles();
+  drawHelpers();
+  drawParticles();
+  drawShip();
+
+  ctx.fillStyle = ultimateReady ? "#ffffff" : "#39e8ff";
+  ctx.font = "12px Orbitron";
+
+  ctx.fillText(
+    ultimateReady
+      ? "ULTIMATE READY — PRESS E"
+      : `ULTIMATE: ${Math.floor(ultimateCharge)}%`,
+    20,
+    H - 22
+  );
 }
+
+// ============================================
+// GAME UPDATE
+// ============================================
 
 function update(dt) {
   if (!running || paused || gameOver) return;
@@ -906,8 +904,8 @@ function update(dt) {
     ship.vy += Math.sin(ship.angle) * thrust * dt;
   }
 
-  const maxSpeed = 350 * ship.speed;
   const speed = Math.hypot(ship.vx, ship.vy);
+  const maxSpeed = 350 * ship.speed;
 
   if (speed > maxSpeed) {
     ship.vx = ship.vx / speed * maxSpeed;
@@ -916,42 +914,29 @@ function update(dt) {
 
   ship.vx *= 0.99;
   ship.vy *= 0.99;
-
   ship.x += ship.vx * dt;
   ship.y += ship.vy * dt;
   wrap(ship);
 
   if (keys[" "] && shootTimer <= 0) {
     fireBullet();
-    shootTimer = Math.max(0.09, 0.35 - getUpgrade("laser") * 0.035);
+    shootTimer = Math.max(0.09, 0.35 - level("laser") * 0.035);
   }
 
   shootTimer -= dt;
 
-  if (getUpgrade("missiles") > 0) {
+  if (level("missiles") > 0) {
     enemyTimer -= dt;
 
     if (enemyTimer <= 0) {
       fireMissile();
-      enemyTimer = Math.max(0.35, 2 - getUpgrade("missiles") * 0.25);
+      enemyTimer = Math.max(0.4, 2 - level("missiles") * 0.25);
     }
   }
 
   if (keys.e) {
     useUltimate();
     keys.e = false;
-  }
-
-  ultimateCharge = Math.min(100, ultimateCharge + dt * 2);
-
-  if (ultimateCharge >= 100) ultimateReady = true;
-
-  if (getUpgrade("shield") > 0) {
-    ship.shield = Math.min(100, ship.shield + dt * (3 + getUpgrade("shield") * 2));
-  }
-
-  if (getUpgrade("repair") > 0) {
-    ship.health = Math.min(100, ship.health + dt * getUpgrade("repair"));
   }
 
   if (keys.q) {
@@ -964,45 +949,51 @@ function update(dt) {
     keys.r = false;
   }
 
-  // Asteroids
+  ultimateCharge = Math.min(100, ultimateCharge + dt * 3);
+  if (ultimateCharge >= 100) ultimateReady = true;
+
+  if (level("shield") > 0) {
+    ship.shield = Math.min(100,
+      ship.shield + dt * (3 + level("shield") * 2));
+  }
+
+  if (level("repair") > 0) {
+    ship.health = Math.min(100,
+      ship.health + dt * level("repair"));
+  }
+
+  // Asteroid movement and collisions
   asteroids.forEach(a => {
     a.x += a.vx * dt;
     a.y += a.vy * dt;
     a.rotation += a.spin * dt;
     wrap(a);
 
-    if (distance(ship, a) < ship.radius + a.radius * 0.75) {
+    if (distance(ship, a) < ship.radius + a.radius * 0.7) {
       damageShip();
-      a.health -= 3;
+      a.health -= 1;
     }
 
-    if (getUpgrade("drones") > 0) {
-      drones.forEach(d => {
-        if (distance({
-          x: ship.x + Math.cos(d.angle) * 65,
-          y: ship.y + Math.sin(d.angle) * 65
-        }, a) < a.radius + 12) {
-          a.health -= dt * 3;
-        }
-      });
-    }
+    drones.forEach(d => {
+      const dx = ship.x + Math.cos(d.angle) * 65;
+      const dy = ship.y + Math.sin(d.angle) * 65;
+
+      if (distance({ x: dx, y: dy }, a) < a.radius + 10) {
+        a.health -= dt * 3;
+      }
+    });
   });
 
-  asteroids = asteroids.filter(a => {
-    if (a.health <= 0) {
-      splitAsteroid(a);
-      return false;
-    }
-    return true;
-  });
+  const destroyed = asteroids.filter(a => a.health <= 0);
+  asteroids = asteroids.filter(a => a.health > 0);
+  destroyed.forEach(splitAsteroid);
 
-  // Player bullets
+  // Player projectiles
   bullets.forEach(b => {
     if (b.type === "missile" && b.target) {
       const angle = Math.atan2(b.target.y - b.y, b.target.x - b.x);
-      const speed = 340;
-      b.vx += (Math.cos(angle) * speed - b.vx) * dt * 2;
-      b.vy += (Math.sin(angle) * speed - b.vy) * dt * 2;
+      b.vx += (Math.cos(angle) * 340 - b.vx) * dt * 2;
+      b.vy += (Math.sin(angle) * 340 - b.vy) * dt * 2;
     }
 
     b.x += b.vx * dt;
@@ -1011,18 +1002,16 @@ function update(dt) {
   });
 
   bullets = bullets.filter(b => {
-    if (b.life <= 0 || b.x < 0 || b.x > W || b.y < 0 || b.y > H) return false;
+    if (b.life <= 0 || b.x < 0 || b.x > W || b.y < 0 || b.y > H) {
+      return false;
+    }
 
     for (const a of asteroids) {
       if (distance(b, a) < a.radius) {
         a.health -= b.damage;
-
-        if (!b.piercing) b.life = 0;
-
         if (b.type === "missile") {
-          createParticles(b.x, b.y, "#ff9c43", 15);
+          createParticles(b.x, b.y, "#ff9c43", 12);
         }
-
         return b.piercing;
       }
     }
@@ -1030,7 +1019,6 @@ function update(dt) {
     for (const e of enemies) {
       if (distance(b, e) < 18) {
         e.health -= b.damage;
-        if (!b.piercing) b.life = 0;
         return b.piercing;
       }
     }
@@ -1038,17 +1026,16 @@ function update(dt) {
     if (boss && distance(b, boss) < boss.radius) {
       boss.health -= b.damage;
       updateBossBar();
-
-      if (!b.piercing) b.life = 0;
       return b.piercing;
     }
 
     return true;
   });
 
-  // Enemy movement and attacks
+  // Enemy movement and shooting
   enemies.forEach(e => {
     const angle = Math.atan2(ship.y - e.y, ship.x - e.x);
+
     e.x += Math.cos(angle) * e.speed * dt;
     e.y += Math.sin(angle) * e.speed * dt;
     e.timer -= dt;
@@ -1057,23 +1044,23 @@ function update(dt) {
       enemyBullets.push({
         x: e.x,
         y: e.y,
-        vx: Math.cos(angle) * 240,
-        vy: Math.sin(angle) * 240,
+        vx: Math.cos(angle) * 190,
+        vy: Math.sin(angle) * 190,
         life: 3
       });
-      e.timer = 1.5;
+
+      e.timer = 2.5;
     }
 
     if (distance(ship, e) < 24) damageShip();
   });
 
-  enemies = enemies.filter(e => {
-    if (e.health <= 0) {
-      addScore(e.elite ? 250 : 100);
-      createParticles(e.x, e.y, "#ff668e", 18);
-      return false;
-    }
-    return true;
+  const defeatedEnemies = enemies.filter(e => e.health <= 0);
+  enemies = enemies.filter(e => e.health > 0);
+
+  defeatedEnemies.forEach(e => {
+    addScore(e.elite ? 250 : 100);
+    createParticles(e.x, e.y, "#ff668e", 18);
   });
 
   enemyBullets.forEach(b => {
@@ -1089,7 +1076,7 @@ function update(dt) {
 
   enemyBullets = enemyBullets.filter(b => b.life > 0);
 
-  // Boss movement and attacks
+  // Boss
   if (boss) {
     boss.x += boss.vx * dt;
 
@@ -1106,24 +1093,25 @@ function update(dt) {
         enemyBullets.push({
           x: boss.x,
           y: boss.y,
-          vx: Math.cos(angle + i * 0.3) * 260,
-          vy: Math.sin(angle + i * 0.3) * 260,
+          vx: Math.cos(angle + i * 0.3) * 190,
+          vy: Math.sin(angle + i * 0.3) * 190,
           life: 4
         });
       }
 
-      boss.attackTimer = boss.legendary ? 0.65 : 1.2;
+      // Slower boss attacks give you more time to dodge.
+      boss.attackTimer = boss.legendary ? 1.5 : 2.5;
     }
 
     if (distance(ship, boss) < boss.radius + 15) damageShip();
 
     if (boss.health <= 0) {
-      createParticles(boss.x, boss.y, "#ffca70", 90);
-      gold += boss.legendary ? 500 : 150;
+      createParticles(boss.x, boss.y, "#ffca70", 80);
+      gold += boss.legendary ? 500 : 200;
       addScore(boss.legendary ? 3000 : 1000);
       boss = null;
-      bossBar.classList.add("hidden");
-      showMessage("BOSS DEFEATED!");
+      $("bossBar").classList.add("hidden");
+      showMessage("BOSS DEFEATED! GOLD REWARDED!");
     }
   }
 
@@ -1136,11 +1124,13 @@ function update(dt) {
       const target = asteroids[0] || enemies[0] || boss;
 
       if (target) {
+        const angle = Math.atan2(target.y - ship.y, target.x - ship.x);
+
         bullets.push({
           x: ship.x + Math.cos(h.angle) * 48,
           y: ship.y + Math.sin(h.angle) * 48,
-          vx: (target.x - ship.x) * 1.5,
-          vy: (target.y - ship.y) * 1.5,
+          vx: Math.cos(angle) * 450,
+          vy: Math.sin(angle) * 450,
           damage: 3,
           life: 1.5,
           type: "laser",
@@ -1154,9 +1144,9 @@ function update(dt) {
 
   drones.forEach(d => d.angle += dt * 2.5);
 
-  // Gold drops and magnet
+  // Gold collection
   drops.forEach(d => {
-    const magnetRange = 70 + getUpgrade("magnet") * 90;
+    const magnetRange = 70 + level("magnet") * 90;
 
     if (distance(ship, d) < magnetRange) {
       const angle = Math.atan2(ship.y - d.y, ship.x - d.x);
@@ -1193,42 +1183,39 @@ function update(dt) {
 
   if (eventTimer > 45) {
     eventTimer = 0;
+    const event = Math.floor(Math.random() * 3);
 
-    const events = ["METEOR STORM", "GOLDEN ASTEROID SHOWER", "ENEMY INVASION"];
-    currentEvent = events[Math.floor(Math.random() * events.length)];
-    showMessage(currentEvent);
-
-    if (currentEvent === "GOLDEN ASTEROID SHOWER") {
+    if (event === 0) {
+      showMessage("METEOR STORM!");
+      for (let i = 0; i < 7; i++) {
+        const pos = randomEdgePosition();
+        createAsteroid(pos.x, pos.y, 1);
+      }
+    } else if (event === 1) {
+      showMessage("GOLDEN ASTEROID SHOWER!");
       for (let i = 0; i < 5; i++) {
         const pos = randomEdgePosition();
         createAsteroid(pos.x, pos.y, 2, true);
       }
-    }
-
-    if (currentEvent === "ENEMY INVASION") {
+    } else {
+      showMessage("ENEMY INVASION!");
       for (let i = 0; i < 3; i++) {
         const pos = randomEdgePosition();
         enemies.push({
           x: pos.x,
           y: pos.y,
           health: 5 + round,
-          speed: 70 + round * 2,
-          timer: 1,
+          speed: 65 + round,
+          timer: 2,
           elite: round % 10 === 0
         });
       }
     }
-
-    if (currentEvent === "METEOR STORM") {
-      for (let i = 0; i < 7; i++) {
-        const pos = randomEdgePosition();
-        createAsteroid(pos.x, pos.y, 1, false);
-      }
-    }
   }
 
-  // Next round
-  if (waveSpawned && asteroids.length === 0 && enemies.length === 0 && !boss) {
+  // Next round begins only when the wave is cleared.
+  if (waveSpawned && asteroids.length === 0 &&
+      enemies.length === 0 && !boss) {
     waveTimer += dt;
 
     if (waveTimer >= 2) {
@@ -1241,40 +1228,17 @@ function update(dt) {
         victory();
       } else {
         waveSpawned = false;
-        spawnWave();
         updateHUD();
+        spawnWave();
       }
     }
   } else {
     waveTimer = 0;
   }
 
-  // Start a wave if needed
   if (!waveSpawned) spawnWave();
 
   updateHUD();
-}
-
-function render() {
-  drawBackground();
-  drawDrops();
-  drawAsteroids();
-  drawEnemies();
-  drawBoss();
-  drawProjectiles();
-  drawHelpers();
-  drawParticles();
-  drawShip();
-
-  if (ultimateReady && running && !paused) {
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 13px Orbitron";
-    ctx.fillText("ULTIMATE READY — PRESS E", 20, H - 22);
-  } else {
-    ctx.fillStyle = "#39e8ff";
-    ctx.font = "12px Orbitron";
-    ctx.fillText(`ULTIMATE: ${Math.floor(ultimateCharge)}%`, 20, H - 22);
-  }
 }
 
 function gameLoop(timestamp) {
@@ -1290,7 +1254,10 @@ function gameLoop(timestamp) {
   if (running) requestAnimationFrame(gameLoop);
 }
 
-// Keyboard controls
+// ============================================
+// CONTROLS
+// ============================================
+
 window.addEventListener("keydown", event => {
   const key = event.key.toLowerCase();
 
@@ -1301,9 +1268,10 @@ window.addEventListener("keydown", event => {
   keys[key] = true;
   keys[event.key] = true;
 
-  if (key === "p" && running && !gameOver && shop.classList.contains("hidden")) {
+  if (key === "p" && running && !gameOver &&
+      $("shop").classList.contains("hidden")) {
     paused = !paused;
-    pauseScreen.classList.toggle("hidden", !paused);
+    $("pauseScreen").classList.toggle("hidden", !paused);
 
     if (!paused) lastTime = performance.now();
   }
@@ -1315,22 +1283,26 @@ window.addEventListener("keyup", event => {
 });
 
 window.addEventListener("blur", () => {
-  if (running && !paused && shop.classList.contains("hidden")) {
+  if (running && !paused && $("shop").classList.contains("hidden")) {
     paused = true;
-    pauseScreen.classList.remove("hidden");
+    $("pauseScreen").classList.remove("hidden");
   }
 });
 
-// Buttons
+// ============================================
+// BUTTONS
+// ============================================
+
 $("startButton").addEventListener("click", resetGame);
 $("continueButton").addEventListener("click", closeShop);
 
 $("resumeButton").addEventListener("click", () => {
   paused = false;
-  pauseScreen.classList.add("hidden");
+  $("pauseScreen").classList.add("hidden");
   lastTime = performance.now();
 });
 
 updateHUD();
 $("highScore").textContent = `HIGH SCORE: ${highScore.toLocaleString()}`;
 showMessage("SYSTEM READY");
+
