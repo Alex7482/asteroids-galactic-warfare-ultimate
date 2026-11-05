@@ -1,0 +1,76 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asteroids: Galactic Warfare — Ultimate Edition</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="game">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-icon">✦</span>
+        <div>
+          <h1>GALACTIC WARFARE</h1>
+          <p>ULTIMATE EDITION</p>
+        </div>
+      </div>
+      <div class="stats">
+        <div><small>SCORE</small><strong id="score">0</strong></div>
+        <div><small>GOLD</small><strong id="gold">0</strong></div>
+        <div><small>ROUND</small><strong id="round">1 / 500</strong></div>
+        <div><small>LIVES</small><strong id="lives">3</strong></div>
+      </div>
+    </header>
+
+    <section class="game-area">
+      <canvas id="gameCanvas"></canvas>
+
+      <div id="bossBar" class="boss-bar hidden">
+        <span id="bossName">BOSS</span>
+        <div class="health-track"><div id="bossHealth"></div></div>
+      </div>
+
+      <div id="overlay" class="overlay">
+        <div class="overlay-panel">
+          <p class="eyebrow">HUMANITY'S LAST DEFENSE</p>
+          <h2 id="overlayTitle">THE GALAXY<br><span>NEEDS YOU</span></h2>
+          <p id="overlayText">Survive 500 rounds. Destroy asteroids, defeat bosses, collect gold, and build the ultimate ship.</p>
+          <button id="startButton">INITIALIZE MISSION</button>
+          <p class="controls">W / ↑ THRUST &nbsp; A / D ROTATE<br>SPACE SHOOT &nbsp; P PAUSE</p>
+        </div>
+      </div>
+
+      <div id="shop" class="shop hidden">
+        <div class="shop-panel">
+          <p class="eyebrow">REARM AND UPGRADE</p>
+          <h2>COMMAND SHOP</h2>
+          <p>Spend your gold to improve your ship.</p>
+          <div class="shop-balance">YOUR GOLD: <strong id="shopGold">0</strong></div>
+          <div id="shopItems" class="shop-items"></div>
+          <button id="continueButton">RETURN TO BATTLE</button>
+        </div>
+      </div>
+
+      <div id="pauseScreen" class="overlay hidden">
+        <div class="overlay-panel">
+          <p class="eyebrow">MISSION SUSPENDED</p>
+          <h2>PAUSED</h2>
+          <p>Take a moment. The galaxy is waiting.</p>
+          <button id="resumeButton">RESUME MISSION</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="bottom-bar">
+      <span id="status">SYSTEM READY</span>
+      <span>MISSION: SURVIVE 500 ROUNDS</span>
+      <span id="highScore">HIGH SCORE: 0</span>
+    </footer>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
