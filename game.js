@@ -1305,4 +1305,3 @@ $("resumeButton").addEventListener("click", () => {
 updateHUD();
 $("highScore").textContent = `HIGH SCORE: ${highScore.toLocaleString()}`;
 showMessage("SYSTEM READY");
-
